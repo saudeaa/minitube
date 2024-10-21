@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>minitube</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 0; background-color: lightblue; }
+        .container { margin-top: 10vh; }
+        #searchBar { width: 500px; height: 44px; border: 1px solid #dfe1e5; border-radius: 24px; padding: 0 15px; font-size: 16px; outline: none; transition: box-shadow 0.3s; }
+        #searchBar:focus { box-shadow: 0 1px 6px rgba(32, 33, 36, 0.28); }
+        #embedButton { margin-top: 20px; padding: 10px 24px; font-size: 14px; color: #3c4043; background-color: #f8f9fa; border: none; border-radius: 4px; cursor: pointer; }
+        #embedButton:hover { box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1); background-color: #e8eaed; color: #202124; }
+        #videoContainer { margin-top: 40px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <input type="text" id="searchBar" placeholder="Enter a YouTube video or playlist URL">
+        <br>
+        <button id="embedButton" onclick="embedVideo()">START</button>
+    </div>
+    <div id="videoContainer"></div>
+    <script>
+        var player;
+
+        function getYouTubeId(url) {
+            try {
+                var urlObj = new URL(url), videoId = urlObj.searchParams.get("v"), playlistId = urlObj.searchParams.get("list");
+                if (playlistId && !videoId) return { type: 'playlist', id: playlistId };
+                else if (videoId) return { type: 'video', id: videoId, playlistId: playlistId };
+                else {
+                    var pathname = urlObj.pathname;
+                    if (urlObj.hostname === 'youtu.be' && pathname.length > 1) return { type: 'video', id: pathname.slice(1), playlistId: playlistId };
+                    return null;
+                }
+            } catch (e) { return null; }
+        }
+
+        function onYouTubeIframeAPIReady() {
+            // This function is called when the YouTube IFrame API is ready
+        }
+
+        function embedVideo() {
+            var url = document.getElementById("searchBar").value, result = getYouTubeId(url);
+            if (result) {
+                var playerVars = {
+                    'autoplay': 1,
+                    'controls': 1,
+                    'rel': 0,
+                    'iv_load_policy': 3
+                };
+
+                var videoId = '';
+
+                if (result.type === 'video') {
+                    videoId = result.id;
+                    playerVars['loop'] = 1;
+                    playerVars['playlist'] = videoId; // Enable loop playback for a single video
+
+                    if (result.playlistId) {
+                        // If URL includes a playlist ID, add it to playerVars
+                        playerVars['list'] = result.playlistId;
+                        playerVars['listType'] = 'playlist';
+                    }
+                } else if (result.type === 'playlist') {
+                    videoId = '';
+                    playerVars['listType'] = 'playlist';
+                    playerVars['list'] = result.id;
+                    playerVars['loop'] = 1;
+                    playerVars['playlist'] = result.id; // Enable loop playback for a playlist
+                }
+
+                if (player) {
+                    // If the player already exists, load the new video or playlist
+                    if (videoId) {
+                        player.loadVideoById(videoId);
+                    } else {
+                        player.loadPlaylist({
+                            'listType': 'playlist',
+                            'list': playerVars['list']
+                        });
+                    }
+                } else {
+                    player = new YT.Player('videoContainer', {
+                        height: '360',
+                        width: '640',
+                        videoId: videoId,
+                        playerVars: playerVars,
+                        events: {
+                            'onError': onPlayerError,
+                            'onReady': onPlayerReady,
+                            'onStateChange': onPlayerStateChange
+                        }
+                    });
+                }
+            } else {
+                alert("Please enter a valid YouTube video or playlist URL.");
+            }
+        }
+
+        function onPlayerReady(event) {
+            event.target.playVideo();
+        }
+
+        function onPlayerError(event) {
+            if (event.data != 150 && event.data != 101) {
+                // Error codes 150 and 101 mean the video cannot be embedded, ignore these errors
+                alert("Unable to play the video.");
+            }
+            // Automatically skip the unplayable video
+            if (player && typeof player.nextVideo === 'function') {
+                player.nextVideo();
+            }
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.ENDED) {
+                // Check if it's a playlist
+                if (player.getPlaylist && player.getPlaylist().length > 1) {
+                    player.nextVideo();
+                } else {
+                    // Single video, restart playback
+                    player.seekTo(0);
+                    player.playVideo();
+                }
+            }
+        }
+
+        // Load the YouTube IFrame Player API
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    </script>
+</body>
+</html>
